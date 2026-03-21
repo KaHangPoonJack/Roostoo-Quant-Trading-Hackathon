@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading Bot Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.0/dist/chartjs-plugin-annotation.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>📈 Trading Bot Dashboard</h1>
+            <div class="header-info">
+                <span id="status-indicator" class="status-indicator">●</span>
+                <span id="last-update">Last update: --</span>
+                <span id="current-time">--:--:--</span>
+            </div>
+        </header>
+
+        <!-- Navigation Tabs -->
+        <nav class="tabs">
+            <button class="tab-btn active" data-tab="overview">Overview</button>
+            <button class="tab-btn" data-tab="coins">Coins</button>
+            <button class="tab-btn" data-tab="ml-predictions">🔮 ML Predictions</button>
+            <button class="tab-btn" data-tab="trades">Trade History</button>
+            <button class="tab-btn" data-tab="analytics">Analytics</button>
+        </nav>
+
+        <!-- Overview Tab -->
+        <section id="overview" class="tab-content active">
+            <div class="overview-grid">
+                <!-- Summary Stats -->
+                <div class="card card-summary">
+                    <h2>📊 Summary</h2>
+                    <div class="stats-grid">
+                        <div class="stat">
+                            <label>Total Trades</label>
+                            <span id="total-trades" class="stat-value">0</span>
+                        </div>
+                        <div class="stat">
+                            <label>Win Rate</label>
+                            <span id="win-rate" class="stat-value">0%</span>
+                        </div>
+                        <div class="stat">
+                            <label>Total P&L</label>
+                            <span id="total-pnl" class="stat-value">0%</span>
+                        </div>
+                        <div class="stat">
+                            <label>Avg P&L</label>
+                            <span id="avg-pnl" class="stat-value">0%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Live Coins Status -->
+                <div class="card card-coins">
+                    <h2>💰 Live Coins Status</h2>
+                    <div id="coins-status" class="coins-grid">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+
+                <!-- Open Trades -->
+                <div class="card card-open-trades">
+                    <h2>🔴 Open Trades</h2>
+                    <div id="open-trades" class="trades-list">
+                        <p class="empty-message">No open trades</p>
+                    </div>
+                </div>
+
+                <!-- Recent Trades -->
+                <div class="card card-recent-trades">
+                    <h2>📝 Recent Trades (Last 5)</h2>
+                    <div id="recent-trades" class="trades-list">
+                        <p class="empty-message">No recent trades</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Coins Tab -->
+        <section id="coins" class="tab-content">
+            <div class="coins-detailed">
+                <div id="coins-container">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+        </section>
+
+        <!-- ML Predictions Tab -->
+        <section id="ml-predictions" class="tab-content">
+            <div class="ml-predictions-detailed">
+                <div class="card">
+                    <h2>🔮 Live ML Predictions - All Coins</h2>
+                    <p class="subtitle">Real-time ML model predictions updated every 15 minutes</p>
+                    <div id="ml-predictions-container" class="ml-predictions-grid">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+                
+                <!-- ML History Charts -->
+                <div class="card">
+                    <h2>📊 ML Prediction History Charts</h2>
+                    <div class="charts-container">
+                        <div class="chart-wrapper">
+                            <canvas id="ml-breakout-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Individual Coin History Blocks -->
+                <div class="card">
+                    <h2>📈 ML History by Coin</h2>
+                    <div id="coin-history-container" class="coin-history-grid">
+                        <!-- Individual coin blocks populated by JS -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Trade History Tab -->
+        <section id="trades" class="tab-content">
+            <div class="trades-detailed">
+                <div class="card">
+                    <h2>All Trades</h2>
+                    <table class="trades-table" id="trades-table">
+                        <thead>
+                            <tr>
+                                <th>Symbol</th>
+                                <th>Entry Time</th>
+                                <th>Entry Price</th>
+                                <th>Side</th>
+                                <th>Exit Time</th>
+                                <th>Exit Price</th>
+                                <th>P&L %</th>
+                                <th>Class</th>
+                                <th>Reason</th>
+                            </tr>
+                        </thead>
+                        <tbody id="trades-tbody">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Analytics Tab -->
+        <section id="analytics" class="tab-content">
+            <div class="analytics-grid">
+                <!-- P&L Chart -->
+                <div class="card">
+                    <h2>📊 P&L Over Time</h2>
+                    <canvas id="pnl-chart"></canvas>
+                </div>
+
+                <!-- Win Rate Chart -->
+                <div class="card">
+                    <h2>🎯 Win Rate by Coin</h2>
+                    <canvas id="win-rate-chart"></canvas>
+                </div>
+
+                <!-- ML Probabilities -->
+                <div class="card">
+                    <h2>🤖 ML Class Distribution</h2>
+                    <canvas id="class-chart"></canvas>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script src="/static/dashboard.js"></script>
+</body>
+</html>
