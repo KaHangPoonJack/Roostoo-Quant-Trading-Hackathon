@@ -54,7 +54,7 @@ LIMIT_ORDER_AT_TP = True  # Place limit order at TP level
 
 PROJECT_ROOT = Path(__file__).parent.parent
 ML_MODEL_DIR = PROJECT_ROOT / "ML" / "models"
-ML_CONFIDENCE_THRESHOLD = 0.5
+ML_CONFIDENCE_THRESHOLD = 0.7
 ML_ENABLED = True
 
 # ===== ROOSTOO EXCHANGE SETTINGS =====
