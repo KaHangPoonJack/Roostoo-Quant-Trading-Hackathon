@@ -1125,3 +1125,213 @@ table tr:hover td {
     font-size: 0.95em;
     text-align: right;
 }
+" " 
+/* Account Balance Display */
+.balance-display {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 15px;
+    background: rgba(59, 130, 246, 0.1);
+    border-radius: 8px;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    margin-right: 15px;
+}
+
+.balance-label {
+    font-size: 0.9em;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.balance-value {
+    font-size: 1.1em;
+    font-weight: 700;
+    color: #10b981;
+    font-family: 'Courier New', monospace;
+    min-width: 80px;
+    text-align: right;
+}
+" " 
+/* Holdings Display */
+.holdings-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.holding-item {
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 8px;
+    padding: 12px;
+}
+
+.holding-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.holding-currency {
+    font-weight: 700;
+    color: var(--primary-color);
+    font-size: 1.1em;
+}
+
+.holding-total {
+    font-weight: 600;
+    color: var(--text-color);
+    font-family: 'Courier New', monospace;
+}
+
+.holding-details {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85em;
+    margin: 4px 0;
+}
+
+.holding-label {
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.holding-value {
+    color: var(--text-color);
+    font-weight: 600;
+    font-family: 'Courier New', monospace;
+}
+" " 
+/* Signal Stats Display */
+.signal-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
+}
+
+.signal-stat {
+    background: rgba(59, 130, 246, 0.1);
+    border-radius: 8px;
+    padding: 15px;
+    text-align: center;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.signal-label {
+    display: block;
+    font-size: 0.85em;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    font-weight: 500;
+}
+
+.signal-value {
+    display: block;
+    font-size: 1.5em;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+" " 
+/* Fix Open Trades Card Glitching */
+.card-open-trades {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+#open-trades {
+    max-height: 350px;
+    overflow-y: auto;
+}
+
+.trade-item {
+    background: rgba(15, 23, 42, 0.5);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 10px;
+    border: 1px solid var(--border-color);
+}
+
+.trade-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.trade-details {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-color);
+}
+" " 
+/* Fix Open Trades Card - Better Scrolling */
+.card-open-trades {
+    max-height: 400px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+#open-trades {
+    max-height: none;
+    overflow-y: visible;
+}
+
+.trade-item {
+    background: rgba(15, 23, 42, 0.5);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 10px;
+    border: 1px solid var(--border-color);
+    break-inside: avoid;
+    page-break-inside: avoid;
+}
+
+/* Fix for Firefox */
+@-moz-document url-prefix() {
+    .trade-item {
+        display: block;
+    }
+}
+
+/* Smooth scrolling */
+.card-open-trades {
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Hide scrollbar but keep functionality */
+.card-open-trades::-webkit-scrollbar {
+    width: 6px;
+}
+
+.card-open-trades::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 3px;
+}
+
+.card-open-trades::-webkit-scrollbar-thumb {
+    background: rgba(59, 130, 246, 0.5);
+    border-radius: 3px;
+}
+
+.card-open-trades::-webkit-scrollbar-thumb:hover {
+    background: rgba(59, 130, 246, 0.8);
+}
+" " 
+/* Summary Stats - Balance Display */
+#total-pnl.positive, #current-balance.positive, #pnl-percent.positive {
+    color: #10b981;
+}
+
+#total-pnl.negative, #current-balance.negative, #pnl-percent.negative {
+    color: #ef4444;
+}

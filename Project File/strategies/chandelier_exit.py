@@ -112,6 +112,11 @@ class ChandelierExit:
         self.bar_count = 0
         self.entry_bar_count = 0  # Track which bar we entered on
         self.max_hold_candles = 20  # Maximum candles to hold trade
+        
+        # Signal tracking counters
+        self.ce_signals_count = 0  # Total CE signals generated
+        self.ml_approved_count = 0  # Signals that passed ML filter
+        self.trades_executed_count = 0  # Trades actually executed
 
         # ML prediction (set by CoinTrader before next() call)
         self.ml_prediction = None
@@ -126,6 +131,18 @@ class ChandelierExit:
         # Real-time monitoring (ADD THESE)
         self.monitoring_thread = None
         self.stop_monitoring = False
+
+    def check_has_open_position(self):
+        """Check if there's actually an open position by checking Roostoo balance"""
+        try:
+            # Get actual position from Roostoo
+            pos_size, _ = get_roostoo_position(pair=self.symbol)
+            has_pos = pos_size > 0.001  # Consider it open if position > 0.001
+            print(f"🔍 Position check for {self.symbol}: Size={pos_size}, Has_Position={has_pos}")
+            return has_pos
+        except Exception as e:
+            print(f"⚠️  Error checking position: {e}")
+            return False
 
     def next(self):
         self.bar_count += 1
@@ -263,12 +280,12 @@ class ChandelierExit:
             print(f"Supertrend: {supertrend:.4f}, Direction: {_direction}, Status: {trend_status}")
 
         # TRADING LOGIC
-        print(f"Position size: {self.position_size}, has_order: {self.has_order}")
+        print(f"Position size: {self.position_size}, has_order: {self.check_has_open_position()}")
 
         current_price = self.current_price  # Use live price for trading decisions
 
         # === TIME-BASED EXIT (Max 20 candles) ===
-        if self.has_order and (self.bar_count - self.entry_bar_count) >= self.max_hold_candles:
+        if self.check_has_open_position() and (self.bar_count - self.entry_bar_count) >= self.max_hold_candles:
             # Held for 20 candles, exit if not profitable enough
             current_pl_pct = ((current_price - self.entry_price) / self.entry_price) * \
                             (1 if self.position_size > 0 else -1) * 100
@@ -348,10 +365,11 @@ class ChandelierExit:
                 send_telegram_message(close_message)
 
         # === ENTRY RULES (only if no position) ===
-        if self.position_size == 0:
-            # Get position info from OKX instead of balance
+        # Check ACTUAL balance/position instead of boolean flag
+        if not self.check_has_open_position():
+            # Get position info from Roostoo instead of balance
             pos_size, _ = get_roostoo_position(pair=self.symbol)
-    
+
             if pos_size <= 0.001:  # No existing position
                 usdt_balance = get_roostoo_balance(ROOSTOO_BASE_CURRENCY)
                 if usdt_balance <= 0:
@@ -393,8 +411,16 @@ class ChandelierExit:
                 else:
                     ml_approved = False  # ML disabled or no prediction, use CE only
 
+                # Count CE signals (buy or sell)
+                if self.buy_signal or self.sell_signal:
+                    self.ce_signals_count += 1
+                    if ml_approved:
+                        self.ml_approved_count += 1
+                    print(f"📊 CE Signal #{self.ce_signals_count}: Buy={self.buy_signal}, Sell={self.sell_signal}, ML_Approved={ml_approved} ({self.ml_approved_count}/{self.ce_signals_count} approved)")
+
                 # LONG: CE buy signal
                 if self.buy_signal and ml_approved:
+                    self.trades_executed_count += 1
                     actual_size_pct = ml_position_size_pct if ml_prediction else self.size
                     entry_value = usdt_balance * actual_size_pct
 
@@ -422,12 +448,29 @@ class ChandelierExit:
                         print(f"⚠️ WARNING: Invalid current_price for entry! Using fallback.")
                         self.entry_price = 0.01
                     self.has_order = True
-                    
+
                     # Track entry bar for time-based exit
                     self.entry_bar_count = self.bar_count
-                    
+
                     # Store original position size for ladder calculations
                     self.original_position_size = self.position_size
+
+                    # ✅ RECORD TRADE ENTRY TO DATABASE
+                    try:
+                        from core.trading_history import history_db
+                        print(f"📝 Recording trade entry: {self.symbol} @ ${self.entry_price}")
+                        trade_id = history_db.record_trade_entry(
+                            symbol=self.symbol,
+                            entry_price=self.entry_price,
+                            side='LONG',
+                            predicted_class=ml_prediction.get('predicted_class') if ml_prediction else None,
+                            predicted_probs=ml_prediction.get('probabilities') if ml_prediction else None
+                        )
+                        print(f"📝 Trade entry recorded to database with ID: {trade_id}")
+                    except Exception as e:
+                        print(f"⚠️  Failed to record trade entry: {e}")
+                        import traceback
+                        traceback.print_exc()
 
                     # ===== SET TAKE PROFIT & STOP LOSS (LADDER SYSTEM) =====
                     if TP_SL_ENABLED and ml_prediction:
@@ -641,6 +684,32 @@ class ChandelierExit:
                     (1 if self.position_size > 0 else -1) * 100
 
         close_roostoo_position(pair=self.symbol)
+
+        # ✅ RECORD TRADE EXIT TO DATABASE
+        try:
+            from core.trading_history import history_db
+            # Get the most recent open trade for this symbol and update it
+            import sqlite3
+            db_path = history_db.db_path
+            with sqlite3.connect(db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE trades
+                    SET exit_time = ?, exit_price = ?, pnl_pct = ?, reason = ?
+                    WHERE symbol = ? AND exit_time IS NULL
+                    ORDER BY entry_time DESC
+                    LIMIT 1
+                """, (
+                    datetime.now(timezone.utc),
+                    current_price,
+                    final_pl_pct,
+                    reason,
+                    self.symbol
+                ))
+                conn.commit()
+            print(f"📝 Trade exit recorded to database")
+        except Exception as e:
+            print(f"⚠️  Failed to record trade exit: {e}")
 
         self.position_size = 0
         self.has_order = False

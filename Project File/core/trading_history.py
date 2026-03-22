@@ -270,14 +270,23 @@ class TradingHistory:
     def record_trade_entry(self, symbol: str, entry_price: float, side: str,
                           predicted_class: int = None, predicted_probs: Dict = None):
         """Record entry of a new trade"""
+        print(f"📝 [DB] Recording trade entry for {symbol} @ ${entry_price}")
+        print(f"📝 [DB] Database path: {self.db_path}")
+        
         with self.lock:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 
-                probs_json = json.dumps(predicted_probs) if predicted_probs else None
+                # Check if trades table exists
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='trades'")
+                if not cursor.fetchone():
+                    print(f"⚠️  [DB] Trades table doesn't exist! Creating it...")
+                    self._initialize_db()  # Re-initialize to create missing tables
                 
+                probs_json = json.dumps(predicted_probs) if predicted_probs else None
+
                 cursor.execute("""
-                    INSERT INTO trades 
+                    INSERT INTO trades
                     (symbol, entry_time, entry_price, side, predicted_class, predicted_probs)
                     VALUES (?, ?, ?, ?, ?, ?)
                 """, (
@@ -288,9 +297,11 @@ class TradingHistory:
                     predicted_class,
                     probs_json
                 ))
-                
+
                 conn.commit()
-                return cursor.lastrowid
+                trade_id = cursor.lastrowid
+                print(f"✅ [DB] Trade entry recorded with ID: {trade_id}")
+                return trade_id
     
     def record_trade_exit(self, trade_id: int, exit_price: float, pnl_pct: float, reason: str = None):
         """Record exit of an open trade"""

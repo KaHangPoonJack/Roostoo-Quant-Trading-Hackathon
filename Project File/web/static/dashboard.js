@@ -16,6 +16,14 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Update live P&L more frequently (every 2 seconds)
     setInterval(updateLivePnL, 2000);
+    
+    // Update balance every 5 seconds
+    updateBalance();
+    setInterval(updateBalance, 5000);
+    
+    // Update holdings every 5 seconds
+    updateHoldings();
+    setInterval(updateHoldings, 5000);
 
     // Initial time update
     updateTime();
@@ -49,6 +57,106 @@ function updateTime() {
     document.getElementById('current-time').textContent = now.toLocaleTimeString();
 }
 
+// Update Account Balance
+async function updateBalance() {
+    try {
+        const response = await fetch(`${API_BASE}/balance`);
+        const data = await response.json();
+        
+        const balanceElement = document.getElementById('account-balance');
+        if (balanceElement && data.total_usd !== undefined) {
+            balanceElement.textContent = `$${data.total_usd.toFixed(2)}`;
+            
+            // Add color based on balance change (if available)
+            if (data.total_usd > 0) {
+                balanceElement.style.color = '#10b981'; // Green
+            } else {
+                balanceElement.style.color = '#e2e8f0'; // Default
+            }
+        }
+    } catch (error) {
+        console.error('Error loading balance:', error);
+        const balanceElement = document.getElementById('account-balance');
+        if (balanceElement) {
+            balanceElement.textContent = '$--.--';
+        }
+    }
+}
+
+// Update Holdings
+async function updateHoldings() {
+    try {
+        const response = await fetch(`${API_BASE}/holdings`);
+        const data = await response.json();
+        
+        const container = document.getElementById('holdings-container');
+        if (!container) return;
+        
+        if (!data.holdings || data.holdings.length === 0) {
+            container.innerHTML = '<p class="empty-message">No holdings</p>';
+            return;
+        }
+        
+        let html = '';
+        data.holdings.forEach(holding => {
+            html += `
+                <div class="holding-item">
+                    <div class="holding-header">
+                        <span class="holding-currency">${holding.currency}</span>
+                        <span class="holding-total">${holding.total.toFixed(4)}</span>
+                    </div>
+                    <div class="holding-details">
+                        <span class="holding-label">Free:</span>
+                        <span class="holding-value">${holding.free.toFixed(4)}</span>
+                    </div>
+                    <div class="holding-details">
+                        <span class="holding-label">Locked:</span>
+                        <span class="holding-value">${holding.locked.toFixed(4)}</span>
+                    </div>
+                </div>
+            `;
+        });
+        
+        container.innerHTML = html;
+    } catch (error) {
+        console.error('Error loading holdings:', error);
+        const container = document.getElementById('holdings-container');
+        if (container) {
+            container.innerHTML = '<p class="empty-message">Error loading holdings</p>';
+        }
+    }
+}
+
+// Update Signal Stats
+function updateSignalStats(metrics) {
+    let total_ce_signals = 0;
+    let total_ml_approved = 0;
+    let total_trades = 0;
+    
+    for (const [symbol, metric] of Object.entries(metrics.metrics || {})) {
+        const stats = metric.signal_stats;
+        if (stats) {
+            total_ce_signals += stats.ce_signals || 0;
+            total_ml_approved += stats.ml_approved || 0;
+        }
+        if (metric.open_trade) {
+            total_trades += 1;
+        }
+    }
+    
+    const approval_rate = total_ce_signals > 0 ? (total_ml_approved / total_ce_signals * 100) : 0;
+    
+    const ceSignalsEl = document.getElementById('ce-signals');
+    const mlApprovedEl = document.getElementById('ml-approved');
+    const approvalRateEl = document.getElementById('approval-rate');
+    const tradesExecutedEl = document.getElementById('trades-executed');
+    
+    if (ceSignalsEl) ceSignalsEl.textContent = total_ce_signals;
+    if (mlApprovedEl) mlApprovedEl.textContent = total_ml_approved;
+    if (approvalRateEl) approvalRateEl.textContent = `${approvalRate.toFixed(1)}%`;
+    if (tradesExecutedEl) tradesExecutedEl.textContent = total_trades;
+}
+
 // Main dashboard load
 async function loadDashboard() {
     try {
@@ -56,11 +164,12 @@ async function loadDashboard() {
             fetch(`${API_BASE}/metrics`).then(r => r.json()),
             fetch(`${API_BASE}/trades`).then(r => r.json())
         ]);
-        
+
         updateOverviewTab(metrics, trades);
         updateCoinsTab(metrics);
         updateStatusIndicator(metrics);
-        
+        updateSignalStats(metrics);  // Add signal stats update
+
     } catch (error) {
         console.error('Error loading dashboard:', error);
     }
@@ -95,32 +204,51 @@ function updateOverviewTab(metrics, trades) {
 
 // Update Summary Stats
 function updateSummaryStats(metrics, trades) {
-    let totalTrades = 0;
-    let totalWins = 0;
-    let totalPnL = 0;
+    const INITIAL_BALANCE = 1000000; // $1,000,000 initial balance
     
-    // Aggregate stats from all coins
-    for (const [symbol, stats] of Object.entries(metrics.stats || {})) {
-        totalTrades += stats.total_trades || 0;
-        totalWins += stats.winning_trades || 0;
-        totalPnL += stats.total_pnl || 0;
+    // Calculate total P&L from closed trades
+    let totalPnlValue = 0;
+    const allTrades = trades.recent_trades || [];
+    
+    allTrades.forEach(trade => {
+        if (trade.exit_price && trade.entry_price && trade.pnl_pct) {
+            // Calculate P&L value for this trade
+            const tradeValue = trade.entry_price * (trade.pnl_pct / 100);
+            totalPnlValue += tradeValue;
+        }
+    });
+    
+    // Add unrealized P&L from open positions
+    let unrealizedPnl = 0;
+    for (const [symbol, metric] of Object.entries(metrics.metrics || {})) {
+        if (metric.open_trade && metric.open_trade_pnl_pct) {
+            unrealizedPnl += metric.open_trade_pnl_pct;
+        }
     }
     
-    const winRate = totalTrades > 0 ? ((totalWins / totalTrades) * 100).toFixed(1) : 0;
-    const avgPnL = totalTrades > 0 ? (totalPnL / totalTrades).toFixed(2) : 0;
+    // Calculate current balance
+    const currentBalance = INITIAL_BALANCE + totalPnlValue;
+    const pnlPercent = (totalPnlValue / INITIAL_BALANCE) * 100;
     
-    document.getElementById('total-trades').textContent = totalTrades;
-    document.getElementById('win-rate').textContent = `${winRate}%`;
+    // Update display
+    const totalPnlEl = document.getElementById('total-pnl');
+    const currentBalanceEl = document.getElementById('current-balance');
+    const pnlPercentEl = document.getElementById('pnl-percent');
     
-    const pnlElement = document.getElementById('total-pnl');
-    pnlElement.textContent = `${totalPnL.toFixed(2)}%`;
-    pnlElement.classList.toggle('positive', totalPnL >= 0);
-    pnlElement.classList.toggle('negative', totalPnL < 0);
+    if (totalPnlEl) {
+        totalPnlEl.textContent = `${totalPnlValue >= 0 ? '+' : ''}$${totalPnlValue.toFixed(2)}`;
+        totalPnlEl.className = `stat-value ${totalPnlValue >= 0 ? 'positive' : 'negative'}`;
+    }
     
-    const avgElement = document.getElementById('avg-pnl');
-    avgElement.textContent = `${avgPnL}%`;
-    avgElement.classList.toggle('positive', avgPnL >= 0);
-    avgElement.classList.toggle('negative', avgPnL < 0);
+    if (currentBalanceEl) {
+        currentBalanceEl.textContent = `$${currentBalance.toFixed(2)}`;
+        currentBalanceEl.className = `stat-value ${currentBalance >= INITIAL_BALANCE ? 'positive' : 'negative'}`;
+    }
+    
+    if (pnlPercentEl) {
+        pnlPercentEl.textContent = `${pnlPercent >= 0 ? '+' : ''}${pnlPercent.toFixed(2)}%`;
+        pnlPercentEl.className = `stat-value ${pnlPercent >= 0 ? 'positive' : 'negative'}`;
+    }
 }
 
 // Update Coins Status
@@ -178,9 +306,15 @@ function updateOpenTrades(metrics) {
 
     let hasOpenTrades = false;
     for (const [symbol, metric] of Object.entries(metrics.metrics || {})) {
-        if (metric.open_trade) {
+        // Check ACTUAL position from Roostoo, not just has_order flag
+        const actualPosSize = metric.actual_position_size || 0;
+        const hasOpenTrade = actualPosSize > 0.001;
+        
+        if (hasOpenTrade) {
             hasOpenTrades = true;
             const pnl = metric.open_trade_pnl_pct || 0;
+            const entryPrice = metric.actual_entry_price || metric.entry_price || 0;
+            
             html += `
                 <div class="trade-item">
                     <span class="trade-symbol">${symbol}</span>
@@ -675,7 +809,7 @@ function updateMLHistoryCharts(history) {
     
     const breakoutDatasets = Object.keys(byCoin).map((symbol, index) => ({
         label: symbol,
-        data: byCoin[symbol].slice(-12).map(p => (p.breakout_prob || 0) * 100),
+        data: byCoin[symbol].slice(-12).map(p => (p.breakout_prob || 0) * 100),  // Last 12 candles
         borderColor: getChartColor(index),
         backgroundColor: getChartColor(index, 0.2),
         tension: 0.4,
@@ -701,7 +835,7 @@ function updateMLHistoryCharts(history) {
             plugins: {
                 title: {
                     display: true,
-                    text: 'Breakout Probability Over Time (Last 12 Candles)',
+                    text: 'Breakout Probability Over Time (Last 12 Candles - 3 Hours)',
                     color: '#e2e8f0',
                     font: { size: 14 }
                 },
@@ -712,14 +846,14 @@ function updateMLHistoryCharts(history) {
                     annotations: {
                         thresholdLine: {
                             type: 'line',
-                            yMin: 50,
-                            yMax: 50,
+                            yMin: 70,  // ML_CONFIDENCE_THRESHOLD = 0.7 (70%)
+                            yMax: 70,
                             borderColor: 'rgba(255, 159, 64, 0.8)',
                             borderWidth: 2,
                             borderDash: [6, 6],
                             label: {
                                 display: true,
-                                content: 'Threshold (50%)',
+                                content: 'Threshold (70%)',
                                 position: 'end',
                                 backgroundColor: 'rgba(255, 159, 64, 0.8)',
                                 color: '#fff',

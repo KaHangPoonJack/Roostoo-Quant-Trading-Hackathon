@@ -34,12 +34,131 @@ def get_status():
     })
 
 
+@app.route('/api/balance', methods=['GET'])
+def get_balance():
+    """Get Roostoo account balance"""
+    try:
+        from core.roostoo_client import get_roostoo_balance
+        from config.settings import ROOSTOO_BASE_CURRENCY
+        
+        # Get USD balance
+        usd_balance = get_roostoo_balance(ROOSTOO_BASE_CURRENCY)
+        
+        return jsonify({
+            'balances': {'USD': usd_balance},
+            'total_usd': usd_balance if usd_balance else 0,
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        })
+    except Exception as e:
+        print(f"❌ Balance API error: {e}")
+        return jsonify({
+            'error': str(e),
+            'total_usd': 0,
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }), 500
+
+
+@app.route('/api/holdings', methods=['GET'])
+def get_holdings():
+    """Get all asset holdings from Roostoo"""
+    try:
+        from core.roostoo_client import get_balance as roostoo_get_balance
+        
+        # Get full balance data
+        data = roostoo_get_balance()
+        
+        if not data:
+            return jsonify({
+                'holdings': [],
+                'total_usd': 0,
+                'timestamp': datetime.now(timezone.utc).isoformat()
+            })
+        
+        # Handle both 'Wallet' and 'SpotWallet' formats
+        wallet = data.get('Wallet', {}) or data.get('SpotWallet', {})
+        
+        # Parse holdings
+        holdings = []
+        total_usd = 0
+        
+        for ccy, balances in wallet.items():
+            if isinstance(balances, dict):
+                free = float(balances.get('Free', 0) or 0)
+                locked = float(balances.get('Locked', 0) or 0)
+                total = free + locked
+                
+                if total > 0:
+                    holdings.append({
+                        'currency': ccy,
+                        'free': free,
+                        'locked': locked,
+                        'total': total
+                    })
+                    
+                    # Simple USD conversion (for non-USD, would need price API)
+                    if ccy == 'USD':
+                        total_usd += total
+        
+        return jsonify({
+            'holdings': holdings,
+            'total_usd': total_usd,
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        })
+    except Exception as e:
+        print(f"❌ Holdings API error: {e}")
+        return jsonify({
+            'error': str(e),
+            'holdings': [],
+            'total_usd': 0,
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }), 500
+
+
 @app.route('/api/traders', methods=['GET'])
 def get_traders():
     """Get status of all traders"""
     return jsonify({
         'traders': live_state['traders'],
         'timestamp': datetime.now(timezone.utc).isoformat()
+    })
+
+
+@app.route('/api/traders/refresh', methods=['POST'])
+def refresh_traders():
+    """Refresh trader status with actual Roostoo positions"""
+    from core.roostoo_client import get_roostoo_position
+    
+    # Update each trader's actual position
+    for symbol, trader in live_state['traders'].items():
+        try:
+            # Get actual position from Roostoo
+            roostoo_pair = f"{symbol}/USD"
+            pos_size, avg_price = get_roostoo_position(pair=roostoo_pair)
+            
+            # If Roostoo returns 0 for entry price, check database for open trade
+            if pos_size > 0.001 and (avg_price == 0 or avg_price is None):
+                open_trades = history_db.get_open_trades_with_pnl()
+                for trade in open_trades:
+                    if trade['symbol'] == symbol:
+                        avg_price = trade.get('entry_price', 0)
+                        break
+            
+            # Update trader state with actual position
+            trader['has_open_trade'] = pos_size > 0.001 and avg_price > 0
+            trader['actual_position_size'] = pos_size
+            trader['actual_entry_price'] = avg_price if (pos_size > 0.001 and avg_price > 0) else 0
+            
+        except Exception as e:
+            print(f"⚠️  {symbol}: Error checking position: {e}")
+            trader['has_open_trade'] = False
+            trader['actual_position_size'] = 0
+            trader['actual_entry_price'] = 0
+    
+    live_state['last_updated'] = datetime.now(timezone.utc).isoformat()
+    
+    return jsonify({
+        'traders': live_state['traders'],
+        'timestamp': live_state['last_updated']
     })
 
 
@@ -64,6 +183,8 @@ def get_trader(symbol):
 @app.route('/api/metrics', methods=['GET'])
 def get_metrics():
     """Get live metrics for all coins"""
+    from core.roostoo_client import get_roostoo_position
+    
     metrics = history_db.get_all_symbols_metrics()
 
     # Get stats for each symbol
@@ -77,6 +198,33 @@ def get_metrics():
         recent_preds = history_db.get_recent_ml_predictions(symbol, limit=1)
         if recent_preds:
             ml_predictions[symbol] = recent_preds[0]
+    
+    # Get ACTUAL position from Roostoo for each symbol
+    for symbol in metrics.keys():
+        try:
+            roostoo_pair = f"{symbol}/USD"
+            pos_size, avg_price = get_roostoo_position(pair=roostoo_pair)
+            
+            # If Roostoo returns 0 for entry price, check database for open trade
+            if pos_size > 0.001 and (avg_price == 0 or avg_price is None):
+                # Query database for most recent open trade
+                open_trades = history_db.get_open_trades_with_pnl()
+                for trade in open_trades:
+                    if trade['symbol'] == symbol:
+                        avg_price = trade.get('entry_price', 0)
+                        break
+            
+            # Update metrics with actual position data - STRICT CHECK
+            metrics[symbol]['actual_position_size'] = pos_size if pos_size else 0
+            metrics[symbol]['actual_entry_price'] = avg_price if (avg_price and avg_price > 0) else 0
+            # Only show as open trade if BOTH position size > 0 AND entry price > 0
+            metrics[symbol]['open_trade'] = (pos_size and pos_size > 0.001) and (avg_price and avg_price > 0)
+            
+        except Exception as e:
+            print(f"⚠️  {symbol}: Error getting position: {e}")
+            metrics[symbol]['actual_position_size'] = 0
+            metrics[symbol]['actual_entry_price'] = 0
+            metrics[symbol]['open_trade'] = False
 
     return jsonify({
         'metrics': metrics,
@@ -233,6 +381,11 @@ def start_api_server(port: int = 5000, debug: bool = False):
     print(f"📊 Dashboard available at: http://localhost:{port}")
     print(f"🔗 API Docs: http://localhost:{port}/api/*")
     print(f"{'='*70}\n")
+    
+    # Disable Flask request logging
+    import logging
+    log = logging.getLogger('werkzeug')
+    log.setLevel(logging.ERROR)
     
     app.run(host='0.0.0.0', port=port, debug=debug, use_reloader=False)
 

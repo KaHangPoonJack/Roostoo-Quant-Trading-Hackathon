@@ -221,12 +221,13 @@ def get_roostoo_account_info() -> Dict:
 def get_roostoo_balance(ccy: str = "USD") -> float:
     """Get balance for a specific currency"""
     data = get_balance()
+    
     if not data:
         return 0.0
     
     # Handle both 'Wallet' and 'SpotWallet' formats
     wallet = data.get('Wallet', {}) or data.get('SpotWallet', {})
-    
+
     if ccy in wallet:
         free_bal = wallet[ccy].get('Free', 0)
         return float(free_bal) if free_bal else 0.0

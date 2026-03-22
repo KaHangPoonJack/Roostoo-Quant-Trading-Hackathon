@@ -4,7 +4,12 @@ import hashlib
 import base64
 import requests
 import time
-from datetime import datetime, timezone, UTC
+from datetime import datetime, timezone
+# UTC timezone - use timezone.utc for Python 3.9 compatibility
+try:
+    from datetime import UTC  # Python 3.11+
+except ImportError:
+    UTC = timezone.utc  # Python 3.9-3.10
 from typing import Optional, Dict, List, Union
 from config.settings import API_KEY, API_SECRET, API_PASSPHRASE, BASE_URL
 

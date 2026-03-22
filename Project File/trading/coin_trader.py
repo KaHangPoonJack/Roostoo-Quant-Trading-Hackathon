@@ -13,7 +13,7 @@ from typing import Dict, Optional
 from ML.live_predictor import CryptoBreakoutPredictor
 from strategies.chandelier_exit import ChandelierExit
 from core.binance_client import get_binance_current_price, get_binance_latest_candle
-from core.roostoo_client import get_roostoo_balance
+from core.roostoo_client import get_roostoo_balance, get_roostoo_position
 from core.telegram_bot import send_telegram_message, send_trade_entry_message, send_trade_exit_message
 from core.trading_history import history_db
 from config.settings import ML_ENABLED, ML_MODEL_DIR, POSITION_SIZE_PCT, TAKE_PROFIT_PCT, STOP_LOSS_PCT
@@ -70,24 +70,81 @@ class CoinTrader:
             if ML_ENABLED:
                 self.ml_predictor = CryptoBreakoutPredictor(model_dir=self.model_dir)
                 print(f"✅ {self.symbol}: ML model loaded from {self.model_dir}")
-            
+
             # Load historical data
             self.df = self._load_historical_data()
-            
+
             # Initialize CE strategy
             self.strategy = ChandelierExit(self.df)
             self.strategy.symbol = self.roostoo_pair  # Set symbol after init
-            
+
             # ✅ PRE-INITIALIZE ATR (so no need to wait 22 bars)
             self._initialize_atr()
             
+            # ✅ CHECK FOR EXISTING POSITION ON STARTUP
+            self._check_existing_position()
+
             self.last_update = datetime.now(timezone.utc)
             self.last_pnl_update = None  # Reset P&L update tracker
             print(f"✅ {self.symbol}: Strategy initialized with ATR pre-initialized")
-            
+
         except Exception as e:
             print(f"❌ {self.symbol}: Initialization failed: {e}")
             raise
+    
+    def _check_existing_position(self):
+        """Check if there's an existing position from before restart"""
+        try:
+            pos_size, avg_price = get_roostoo_position(pair=self.strategy.symbol)
+            
+            if pos_size > 0.001:
+                print(f"🔍 {self.symbol}: EXISTING POSITION DETECTED!")
+                print(f"   Position Size: {pos_size}")
+                print(f"   Avg Entry Price: ${avg_price}")
+                
+                # Set strategy to track this position
+                self.strategy.position_size = pos_size
+                self.strategy.entry_price = avg_price
+                self.strategy.has_order = True
+                
+                # Get current price for P&L calculation
+                current_price = get_binance_current_price(self.binance_symbol)
+                self.strategy.current_price = current_price
+                
+                # Calculate current P&L
+                current_pnl = ((current_price - avg_price) / avg_price) * 100
+                print(f"   Current Price: ${current_price}")
+                print(f"   Current P&L: {current_pnl:+.2f}%")
+                print(f"   ✅ Position recovery complete - P&L tracking resumed")
+                
+                # Send POSITION RECOVERED notification
+                send_telegram_message(
+                    f"🔄 <b>POSITION RECOVERED ON RESTART</b>\n"
+                    f"├─ Symbol: {self.symbol}\n"
+                    f"├─ Position Size: {pos_size}\n"
+                    f"├─ Entry Price: ${avg_price}\n"
+                    f"├─ Current Price: ${current_price}\n"
+                    f"├─ Current P&L: {current_pnl:+.2f}%\n"
+                    f"└─ Bot restarted - P&L tracking resumed"
+                )
+                
+                # Send P&L UPDATE notification (as if it's a regular 15min update)
+                trend = "UPTREND" if self.strategy.is_uptrend else "DOWNTREND"
+                send_telegram_message(
+                    f"📊 <b>{self.symbol} P&L UPDATE</b>\n"
+                    f"├─ Side: LONG\n"
+                    f"├─ Entry: ${avg_price:.2f}\n"
+                    f"├─ Current: ${current_price:.2f}\n"
+                    f"├─ P&L: {current_pnl:+.2f}%\n"
+                    f"├─ Supertrend: {trend}\n"
+                    f"└─ Time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}\n"
+                )
+                
+                print(f"📊 P&L update sent for recovered position")
+            else:
+                print(f"🔍 {self.symbol}: No existing position found")
+        except Exception as e:
+            print(f"⚠️  {self.symbol}: Error checking existing position: {e}")
     
     def _load_historical_data(self, days_back=3, interval='15m'):
         """Load historical candles for this coin"""
@@ -219,19 +276,43 @@ class CoinTrader:
     
     def _update_pnl_if_open(self):
         """Send P&L update every 15 minutes if trade is open (Telegram + Terminal)"""
-        if self.strategy and self.strategy.has_order and self.strategy.entry_price > 0:
-            current_price = self.strategy.current_price
-            current_pl_pct = ((current_price - self.strategy.entry_price) / self.strategy.entry_price) * \
-                            (1 if self.strategy.position_size > 0 else -1) * 100
+        # Get actual position from Roostoo
+        actual_pos_size, actual_avg_price = get_roostoo_position(pair=self.strategy.symbol)
 
-            side = "LONG" if self.strategy.position_size > 0 else "SHORT"
+        # Only send P&L update if there's actually a position
+        if actual_pos_size > 0.001:
+            # Get entry price - use Roostoo value if available, otherwise check database
+            entry_price = actual_avg_price if (actual_avg_price and actual_avg_price > 0) else 0
+            
+            # If Roostoo doesn't return entry price, query database
+            if entry_price == 0:
+                try:
+                    open_trades = history_db.get_open_trades_with_pnl()
+                    for trade in open_trades:
+                        if trade['symbol'] == self.strategy.symbol:
+                            entry_price = trade.get('entry_price', 0)
+                            print(f"📝 {self.symbol}: Entry price ${entry_price} recovered from database")
+                            break
+                except Exception as e:
+                    print(f"⚠️  {self.symbol}: Error getting entry price from DB: {e}")
+            
+            # Skip if we still don't have entry price
+            if entry_price == 0:
+                print(f"⚠️  {self.symbol}: Cannot send P&L update - entry price is 0")
+                return
+            
+            current_price = self.strategy.current_price
+            # LONG only (no shorting)
+            current_pl_pct = ((current_price - entry_price) / entry_price) * 100
+
+            side = "LONG"  # Always LONG since we don't short
             trend = "UPTREND" if self.strategy.is_uptrend else "DOWNTREND"
 
             # Send P&L update to Telegram (every bar = every 15min for open trades)
             pnl_message = (
                 f"📊 <b>{self.symbol} P&L UPDATE</b>\n"
                 f"├─ Side: {side}\n"
-                f"├─ Entry: ${self.strategy.entry_price:.2f}\n"
+                f"├─ Entry: ${entry_price:.2f}\n"
                 f"├─ Current: ${current_price:.2f}\n"
                 f"├─ P&L: {current_pl_pct:+.2f}%\n"
                 f"├─ Supertrend: {trend}\n"
@@ -244,7 +325,7 @@ class CoinTrader:
             print(f"📊 {self.symbol} P&L UPDATE @ {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
             print(f"{'='*50}")
             print(f"   Side: {side}")
-            print(f"   Entry Price: ${self.strategy.entry_price:.2f}")
+            print(f"   Entry Price: ${entry_price:.2f}")
             print(f"   Current Price: ${current_price:.2f}")
             print(f"   P&L: {current_pl_pct:+.2f}%")
             print(f"   Supertrend: {trend}")
@@ -340,5 +421,10 @@ class CoinTrader:
             'total_pnl': self.total_pnl,
             'current_position': self.strategy.position_size if self.strategy else 0,
             'current_price': self.strategy.current_price if self.strategy else 0,
-            'has_open_trade': self.strategy.has_order if self.strategy else False
+            'has_open_trade': self.strategy.has_order if self.strategy else False,
+            'signal_stats': {
+                'ce_signals': self.strategy.ce_signals_count if self.strategy else 0,
+                'ml_approved': self.strategy.ml_approved_count if self.strategy else 0,
+                'trades_executed': self.strategy.trades_executed_count if self.strategy else 0
+            } if self.strategy else None
         }

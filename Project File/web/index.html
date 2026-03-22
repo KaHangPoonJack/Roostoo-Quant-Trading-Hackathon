@@ -14,6 +14,10 @@
         <header class="header">
             <h1>📈 Trading Bot Dashboard</h1>
             <div class="header-info">
+                <div class="balance-display">
+                    <span class="balance-label">💰 Balance:</span>
+                    <span id="account-balance" class="balance-value">$0.00</span>
+                </div>
                 <span id="status-indicator" class="status-indicator">●</span>
                 <span id="last-update">Last update: --</span>
                 <span id="current-time">--:--:--</span>
@@ -37,21 +41,52 @@
                     <h2>📊 Summary</h2>
                     <div class="stats-grid">
                         <div class="stat">
-                            <label>Total Trades</label>
-                            <span id="total-trades" class="stat-value">0</span>
-                        </div>
-                        <div class="stat">
-                            <label>Win Rate</label>
-                            <span id="win-rate" class="stat-value">0%</span>
+                            <label>Initial Balance</label>
+                            <span id="initial-balance" class="stat-value">$1,000,000</span>
                         </div>
                         <div class="stat">
                             <label>Total P&L</label>
-                            <span id="total-pnl" class="stat-value">0%</span>
+                            <span id="total-pnl" class="stat-value">$0.00</span>
                         </div>
                         <div class="stat">
-                            <label>Avg P&L</label>
-                            <span id="avg-pnl" class="stat-value">0%</span>
+                            <label>Current Balance</label>
+                            <span id="current-balance" class="stat-value">$1,000,000</span>
                         </div>
+                        <div class="stat">
+                            <label>P&L %</label>
+                            <span id="pnl-percent" class="stat-value">0.00%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Signal Stats -->
+                <div class="card card-signal-stats">
+                    <h2>📊 Signal Stats (Today)</h2>
+                    <div id="signal-stats-container" class="signal-stats-grid">
+                        <div class="signal-stat">
+                            <span class="signal-label">CE Signals:</span>
+                            <span id="ce-signals" class="signal-value">0</span>
+                        </div>
+                        <div class="signal-stat">
+                            <span class="signal-label">ML Approved:</span>
+                            <span id="ml-approved" class="signal-value">0</span>
+                        </div>
+                        <div class="signal-stat">
+                            <span class="signal-label">Approval Rate:</span>
+                            <span id="approval-rate" class="signal-value">0%</span>
+                        </div>
+                        <div class="signal-stat">
+                            <span class="signal-label">Trades Executed:</span>
+                            <span id="trades-executed" class="signal-value">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Holdings -->
+                <div class="card card-holdings">
+                    <h2>💼 Holdings</h2>
+                    <div id="holdings-container" class="holdings-list">
+                        <p class="empty-message">Loading holdings...</p>
                     </div>
                 </div>
 

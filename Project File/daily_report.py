@@ -46,7 +46,9 @@ def get_daily_trading_summary(date: datetime):
                 'wins': 0,
                 'losses': 0,
                 'pnl': 0,
-                'win_rate': 0
+                'win_rate': 0,
+                'ce_signals': 0,
+                'ml_approved': 0
             }
         coin_stats[symbol]['trades'] += 1
         if trade.get('pnl_pct', 0) > 0:
@@ -177,6 +179,14 @@ def format_daily_report(trading_summary, ml_summary):
             message += f"├─ {ml['symbol']}: {ml['total_predictions']} preds | "
             message += f"Conf: {ml['avg_confidence']*100:.1f}% | "
             message += f"Breakout: {ml['avg_breakout_prob']*100:.1f}%\n"
+    
+    # Signal Stats
+    message += f"\n📊 <b>SIGNAL STATS:</b>\n"
+    total_ce_signals = sum(stats.get('ce_signals', 0) for stats in s['by_coin'].values())
+    total_ml_approved = sum(stats.get('ml_approved', 0) for stats in s['by_coin'].values())
+    message += f"├─ CE Signals Generated: {total_ce_signals}\n"
+    message += f"├─ ML Approved: {total_ml_approved} ({total_ml_approved/total_ce_signals*100 if total_ce_signals > 0 else 0:.1f}%)\n"
+    message += f"└─ Trades Executed: {s['total_trades']}\n"
     
     message += f"\n⏰ Report generated at: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}\n"
     
