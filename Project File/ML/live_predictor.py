@@ -275,7 +275,7 @@ class CryptoBreakoutPredictor:
         adx_1h_col = [c for c in adx_1h.columns if 'ADX' in c.upper()][0]
         df_1h['adx_14_1h'] = adx_1h[adx_1h_col]
         
-        df_1h = df_1h.resample('15T').ffill()
+        df_1h = df_1h.resample('15min').ffill()
         df = df.merge(df_1h[['ema_50_1h', 'ema_200_1h', 'adx_14_1h']], 
                     left_index=True, right_index=True, how='left')
         df[['ema_50_1h', 'ema_200_1h', 'adx_14_1h']] = df[['ema_50_1h', 'ema_200_1h', 'adx_14_1h']].ffill()
