@@ -317,52 +317,72 @@ class ChandelierExit:
         # === EXIT LONG ===
         if self.position_size > 0:
             in_profit = (current_price > self.entry_price)
-            if self.sell_signal or (not self.is_uptrend and in_profit):
-                final_pl_pct = ((current_price - self.entry_price) / self.entry_price) * (1 if self.position_size > 0 else -1) * 100
-                close_roostoo_position(pair=self.symbol, side="SELL")
-                self.position_size = 0
-                self.has_order = False
-                self.long_stop_prev = None
-                self.short_stop_prev = None
-                self.dir = 0
-                self.prev_dir = 0
-                reason = "CE Sell Signal" if self.sell_signal else "Supertrend Down (in profit)"
-                close_message = (
-                    f"🚨 <b>CLOSED LONG POSITION</b>\n"
-                    f"├─ Symbol: {self.symbol}\n"
-                    f"├─ Reason: {reason}\n"
-                    f"├─ Exit Price: ${current_price:.2f}\n"
-                    f"├─ Entry Price: ${self.entry_price:.2f}\n"
-                    f"├─ P&L: {final_pl_pct:+.2f}%\n"
-                    f"└─ Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}"
-                )
-                print(f"CLOSED LONG → {reason} @ {current_price:.2f} | P&L: {final_pl_pct:+.2f}%")
-                send_telegram_message(close_message)
+            
+            # Only allow CE exit after minimum holding period (3 candles = 45 min)
+            min_hold_candles = 1
+            candles_held = self.bar_count - self.entry_bar_count
+            
+            if candles_held >= min_hold_candles:
+                if self.sell_signal or (not self.is_uptrend and in_profit):
+                    final_pl_pct = ((current_price - self.entry_price) / self.entry_price) * (1 if self.position_size > 0 else -1) * 100
+                    close_roostoo_position(pair=self.symbol, side="SELL")
+                    self.position_size = 0
+                    self.has_order = False
+                    self.long_stop_prev = None
+                    self.short_stop_prev = None
+                    self.dir = 0
+                    self.prev_dir = 0
+                    reason = "CE Sell Signal" if self.sell_signal else "Supertrend Down (in profit)"
+                    close_message = (
+                        f"🚨 <b>CLOSED LONG POSITION</b>\n"
+                        f"├─ Symbol: {self.symbol}\n"
+                        f"├─ Reason: {reason}\n"
+                        f"├─ Exit Price: ${current_price:.2f}\n"
+                        f"├─ Entry Price: ${self.entry_price:.2f}\n"
+                        f"├─ P&L: {final_pl_pct:+.2f}%\n"
+                        f"└─ Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}"
+                    )
+                    print(f"CLOSED LONG → {reason} @ {current_price:.2f} | P&L: {final_pl_pct:+.2f}%")
+                    send_telegram_message(close_message)
+            else:
+                # Still in minimum holding period - log but don't exit
+                if self.sell_signal or not self.is_uptrend:
+                    print(f"⏳ {self.symbol}: CE exit signal ignored (held {candles_held}/{min_hold_candles} candles)")
 
         # === EXIT SHORT ===
         if self.position_size < 0:
             in_profit = current_price < self.entry_price
-            if self.buy_signal or (self.is_uptrend and in_profit):
-                final_pl_pct = ((current_price - self.entry_price) / self.entry_price) * (1 if self.position_size > 0 else -1) * 100
-                close_roostoo_position(pair=self.symbol, side="BUY")
-                self.position_size = 0
-                self.has_order = False
-                self.long_stop_prev = None
-                self.short_stop_prev = None
-                self.dir = 0
-                self.prev_dir = 0
-                reason = "CE Buy Signal" if self.buy_signal else "Supertrend Up (in profit)"
-                close_message = (
-                    f"🚨 <b>CLOSED SHORT POSITION</b>\n"
-                    f"├─ Symbol: {self.symbol}\n"
-                    f"├─ Reason: {reason}\n"
-                    f"├─ Exit Price: ${current_price:.2f}\n"
-                    f"├─ Entry Price: ${self.entry_price:.2f}\n"
-                    f"├─ P&L: {final_pl_pct:+.2f}%\n"
-                    f"└─ Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}"
-                )
-                print(f"CLOSED SHORT → {reason} @ {current_price:.2f} | P&L: {final_pl_pct:+.2f}%")
-                send_telegram_message(close_message)
+            
+            # Only allow CE exit after minimum holding period (3 candles = 45 min)
+            min_hold_candles = 1
+            candles_held = self.bar_count - self.entry_bar_count
+            
+            if candles_held >= min_hold_candles:
+                if self.buy_signal or (self.is_uptrend and in_profit):
+                    final_pl_pct = ((current_price - self.entry_price) / self.entry_price) * (1 if self.position_size > 0 else -1) * 100
+                    close_roostoo_position(pair=self.symbol, side="BUY")
+                    self.position_size = 0
+                    self.has_order = False
+                    self.long_stop_prev = None
+                    self.short_stop_prev = None
+                    self.dir = 0
+                    self.prev_dir = 0
+                    reason = "CE Buy Signal" if self.buy_signal else "Supertrend Up (in profit)"
+                    close_message = (
+                        f"🚨 <b>CLOSED SHORT POSITION</b>\n"
+                        f"├─ Symbol: {self.symbol}\n"
+                        f"├─ Reason: {reason}\n"
+                        f"├─ Exit Price: ${current_price:.2f}\n"
+                        f"├─ Entry Price: ${self.entry_price:.2f}\n"
+                        f"├─ P&L: {final_pl_pct:+.2f}%\n"
+                        f"└─ Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}"
+                    )
+                    print(f"CLOSED SHORT → {reason} @ {current_price:.2f} | P&L: {final_pl_pct:+.2f}%")
+                    send_telegram_message(close_message)
+            else:
+                # Still in minimum holding period - log but don't exit
+                if self.buy_signal or self.is_uptrend:
+                    print(f"⏳ {self.symbol}: CE exit signal ignored (held {candles_held}/{min_hold_candles} candles)")
 
         # === ENTRY RULES (only if no position) ===
         # Check ACTUAL balance/position instead of boolean flag

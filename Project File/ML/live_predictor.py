@@ -265,7 +265,7 @@ class CryptoBreakoutPredictor:
         df['keltner_width'] = (df['keltner_upper'] - df['keltner_lower']) / (df['close'] + 1e-8)
         
         # ===== MULTI-TIMEFRAME (5) =====
-        df_1h = df[['close', 'high', 'low']].resample('1H').agg({
+        df_1h = df[['close', 'high', 'low']].resample('1h').agg({
             'close': 'last', 'high': 'max', 'low': 'min'
         })
         df_1h['ema_50_1h'] = df_1h['close'].ewm(span=50).mean()

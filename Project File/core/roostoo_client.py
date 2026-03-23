@@ -251,40 +251,54 @@ def get_roostoo_current_price(pair: str = "ETH/USD") -> float:
     return 0.0
 
 
-def calculate_roostoo_order_size(usd_amount: float, coin_price: float, 
-                                  price_precision: int = 2, 
+def calculate_roostoo_order_size(usd_amount: float, coin_price: float,
+                                  price_precision: int = 2,
                                   amount_precision: int = 2,
                                   mini_order: float = 1.0) -> str:
     """Calculate valid order size for Roostoo spot trading"""
     coin_amount = usd_amount / coin_price
+    
+    # For very low-priced coins (like PEPE), use higher precision
+    if coin_price < 0.0001:
+        amount_precision = 8  # Use 8 decimals for very small prices
+    elif coin_price < 0.01:
+        amount_precision = 6  # Use 6 decimals for small prices
+    elif coin_price < 0.1:
+        amount_precision = 4  # Use 4 decimals for medium prices
+    
     precision_multiplier = 10 ** amount_precision
     valid_amount = int(coin_amount * precision_multiplier) / precision_multiplier
-    
+
     order_value = valid_amount * coin_price
     if order_value < mini_order:
         valid_amount = mini_order / coin_price
         valid_amount = int(valid_amount * precision_multiplier) / precision_multiplier
-    
+
     return f"{valid_amount:.{amount_precision}f}"
 
 
-def place_roostoo_order(pair: str = "ETH/USD", 
-                        side: str = "BUY", 
+def place_roostoo_order(pair: str = "ETH/USD",
+                        side: str = "BUY",
                         order_type: str = "MARKET",
                         quantity: str = None,
                         price: float = None) -> Optional[str]:
     """Place an order on Roostoo (returns order_id)"""
-    data = place_order(pair_or_coin=pair, side=side, quantity=quantity, 
+    data = place_order(pair_or_coin=pair, side=side, quantity=quantity,
                        price=price, order_type=order_type)
-    
+
     if data and data.get('Success'):
         order_detail = data.get('OrderDetail', {})
         order_id = order_detail.get('OrderID')
         status = order_detail.get('Status')
         print(f"✅ Order placed: ID={order_id}, Status={status}")
         return str(order_id)
-    
-    return None
+    else:
+        # Log the error for debugging
+        error_msg = data.get('Message', 'Unknown error') if data else 'No response'
+        print(f"❌ Order FAILED for {pair}: {error_msg}")
+        print(f"   Quantity: {quantity}")
+        print(f"   Full Response: {data}")
+        return None
 
 
 def query_roostoo_order(order_id: str = None, pair: str = None, 

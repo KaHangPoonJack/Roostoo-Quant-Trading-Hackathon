@@ -347,7 +347,7 @@ class CoinTrader:
         )
 
     def _print_ml_prediction(self):
-        """Print comprehensive ML prediction to terminal and log to database (NO Telegram)"""
+        """Print comprehensive ML prediction to terminal and send to Telegram every 15min"""
         if not ML_ENABLED or self.ml_predictor is None:
             return
 
@@ -361,7 +361,11 @@ class CoinTrader:
             tp_pct = TAKE_PROFIT_PCT.get(ml_prediction['predicted_class'], 0.01) * 100
             sl_pct = STOP_LOSS_PCT.get(ml_prediction['predicted_class'], 0.015) * 100
 
-            # ✅ LOG ML PREDICTION TO DATABASE (NO TELEGRAM)
+            # ✅ SEND TO TELEGRAM (every 15min)
+            from core.telegram_bot import send_ml_prediction_message
+            send_ml_prediction_message(ml_prediction)
+
+            # ✅ LOG ML PREDICTION TO DATABASE
             ml_prediction['tp_target'] = tp_pct
             ml_prediction['sl_limit'] = sl_pct
             history_db.record_ml_prediction(self.symbol, ml_prediction)
