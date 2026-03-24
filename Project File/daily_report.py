@@ -188,6 +188,33 @@ def format_daily_report(trading_summary, ml_summary):
     message += f"├─ ML Approved: {total_ml_approved} ({total_ml_approved/total_ce_signals*100 if total_ce_signals > 0 else 0:.1f}%)\n"
     message += f"└─ Trades Executed: {s['total_trades']}\n"
     
+    # Detailed Trade History with Class Probabilities
+    if trading_summary.get('all_trades'):
+        message += f"\n📝 <b>TRADE HISTORY:</b>\n"
+        for trade in trading_summary['all_trades'][:10]:  # Last 10 trades
+            entry_time = trade.get('entry_time', 'N/A')
+            if isinstance(entry_time, str):
+                entry_time = entry_time[11:16]  # Extract HH:MM
+            
+            exit_time = trade.get('exit_time', 'N/A')
+            if isinstance(exit_time, str):
+                exit_time = exit_time[11:16]  # Extract HH:MM
+            
+            pnl = trade.get('pnl_pct', 0)
+            pnl_icon = "✅" if pnl >= 0 else "❌"
+            
+            message += f"├─ {pnl_icon} {trade['symbol']} {trade.get('side', 'LONG')} | "
+            message += f"Entry: ${trade.get('entry_price', 0):.2f} → Exit: ${trade.get('exit_price', 0):.2f} | "
+            message += f"P&L: {pnl:+.2f}% | "
+            message += f"{entry_time}→{exit_time}\n"
+            
+            # Add class probabilities if available
+            if trade.get('predicted_probs'):
+                probs = trade['predicted_probs']
+                if isinstance(probs, list) and len(probs) >= 4:
+                    pred_class = trade.get('predicted_class', 'N/A')
+                    message += f"│   └─ Class {pred_class}: [{probs[0]*100:.0f}%, {probs[1]*100:.0f}%, {probs[2]*100:.0f}%, {probs[3]*100:.0f}%]\n"
+    
     message += f"\n⏰ Report generated at: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}\n"
     
     return message

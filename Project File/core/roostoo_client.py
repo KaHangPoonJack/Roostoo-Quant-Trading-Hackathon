@@ -257,24 +257,36 @@ def calculate_roostoo_order_size(usd_amount: float, coin_price: float,
                                   mini_order: float = 1.0) -> str:
     """Calculate valid order size for Roostoo spot trading"""
     coin_amount = usd_amount / coin_price
-    
-    # For very low-priced coins (like PEPE), use higher precision
-    if coin_price < 0.0001:
-        amount_precision = 8  # Use 8 decimals for very small prices
-    elif coin_price < 0.01:
-        amount_precision = 6  # Use 6 decimals for small prices
+
+    # For low-priced coins, use INTEGER quantities (no decimals)
+    # This is required by the exchange to avoid "quantity step size error"
+    if coin_price < 0.01:
+        # For coins < $0.01, use integer quantities only
+        valid_amount = int(coin_amount)
+        amount_precision = 0
     elif coin_price < 0.1:
-        amount_precision = 4  # Use 4 decimals for medium prices
-    
-    precision_multiplier = 10 ** amount_precision
-    valid_amount = int(coin_amount * precision_multiplier) / precision_multiplier
+        # For coins < $0.10, use 2 decimals
+        amount_precision = 2
+        precision_multiplier = 10 ** amount_precision
+        valid_amount = int(coin_amount * precision_multiplier) / precision_multiplier
+    else:
+        # For normal coins, use standard precision
+        precision_multiplier = 10 ** amount_precision
+        valid_amount = int(coin_amount * precision_multiplier) / precision_multiplier
 
     order_value = valid_amount * coin_price
     if order_value < mini_order:
         valid_amount = mini_order / coin_price
-        valid_amount = int(valid_amount * precision_multiplier) / precision_multiplier
+        if coin_price < 0.01:
+            valid_amount = int(valid_amount)
+        else:
+            precision_multiplier = 10 ** amount_precision
+            valid_amount = int(valid_amount * precision_multiplier) / precision_multiplier
 
-    return f"{valid_amount:.{amount_precision}f}"
+    if amount_precision == 0:
+        return f"{int(valid_amount)}"
+    else:
+        return f"{valid_amount:.{amount_precision}f}"
 
 
 def place_roostoo_order(pair: str = "ETH/USD",

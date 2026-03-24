@@ -215,20 +215,23 @@ class TradingHistory:
             return [dict(row) for row in rows]
 
     def get_trades_by_date(self, date: datetime):
-        """Get all trades for a specific date"""
+        """Get all trades for a specific date (by entry_time or exit_time)"""
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
-            
+
             start_date = date.replace(hour=0, minute=0, second=0, microsecond=0)
             end_date = date.replace(hour=23, minute=59, second=59, microsecond=999999)
-            
+
+            # Get trades that were entered OR exited on this date
             cursor.execute("""
                 SELECT * FROM trades
-                WHERE exit_time BETWEEN ? AND ?
-                ORDER BY exit_time DESC
-            """, (start_date, end_date))
-            
+                WHERE (entry_time BETWEEN ? AND ?)
+                   OR (exit_time BETWEEN ? AND ?)
+                   OR (exit_time IS NULL AND entry_time BETWEEN ? AND ?)
+                ORDER BY entry_time DESC
+            """, (start_date, end_date, start_date, end_date, start_date, end_date))
+
             rows = cursor.fetchall()
             results = []
             for row in rows:
@@ -239,7 +242,7 @@ class TradingHistory:
                     except:
                         pass
                 results.append(result)
-            
+
             return results
 
     def get_open_trades_with_pnl(self):
